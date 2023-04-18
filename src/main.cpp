@@ -7,6 +7,14 @@
 #include <GLFW/glfw3.h>
 
 
+
+#ifdef NDEBUG
+    const bool enableValidationLayers = false;
+#else
+    const bool enableValidationLayers = true;
+#endif
+
+
 using namespace std;
 
 class TriangleApp{
@@ -23,9 +31,10 @@ class TriangleApp{
     const uint32_t HEIGHT = 600;
     GLFWwindow* window;
     VkInstance instance;
+    VkDebugUtilsMessengerEXT debugMessenger;
 
-    uint32_t glfwExtentionCount = 0;
-    const char** glfwExtentionNames;
+    vector<const char*> layerProperties = {"VK_LAYER_KHRONOS_validation"};
+   
 
     void initWindow() {
         glfwInit();
@@ -38,7 +47,7 @@ class TriangleApp{
 
     void initVulkan(){
         createInstance();
-
+        setupDebugMessenger();
     }
     void mainloop(){
         while (!glfwWindowShouldClose(window))
@@ -54,6 +63,10 @@ class TriangleApp{
     }
 
     void createInstance(){
+        if (enableValidationLayers && !checkValidationLayerSupport()){
+            cout<<"Validation layer requested but Not Support\n";
+         }
+
         VkApplicationInfo info{};
         info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         info.pApplicationName = "Vulkan Engin";
@@ -65,10 +78,17 @@ class TriangleApp{
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &info;
 
-        glfwExtentionNames = glfwGetRequiredInstanceExtensions(&glfwExtentionCount);
-        createInfo.enabledExtensionCount = glfwExtentionCount;
-        createInfo.ppEnabledExtensionNames = glfwExtentionNames;
-        createInfo.enabledLayerCount = 0;
+        auto allExtensions = getRequiredExtensions();
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(allExtensions.size());
+        createInfo.ppEnabledExtensionNames = allExtensions.data();
+        
+        if (enableValidationLayers){
+            createInfo.enabledLayerCount = static_cast<uint32_t>(layerProperties.size());
+            createInfo.ppEnabledLayerNames = layerProperties.data();
+        }else{
+            createInfo.enabledLayerCount = 0;
+        }
+
         if(vkCreateInstance(&createInfo,nullptr,&instance) != VK_SUCCESS){
             cout<<"Failed to create instance";
         }
@@ -84,6 +104,54 @@ class TriangleApp{
         }
     }
 
+    vector<const char*> getRequiredExtensions(){
+        uint32_t extenstionCount = 0;
+        const char** glfwExtensions;
+        glfwExtensions = glfwGetRequiredInstanceExtensions(&extenstionCount);
+        vector<const char*> extensions(glfwExtensions, glfwExtensions+extenstionCount);
+
+        if (enableValidationLayers){
+            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        }
+
+        return extensions;
+    }
+
+    bool checkValidationLayerSupport(){
+        uint32_t vkValidationLayerCount = 0;
+        vkEnumerateInstanceLayerProperties(&vkValidationLayerCount, nullptr);
+        vector<VkLayerProperties> availableLayers(vkValidationLayerCount);
+        vkEnumerateInstanceLayerProperties(&vkValidationLayerCount, availableLayers.data());
+
+        bool support = true;
+        for (auto& layer : layerProperties){
+            bool match = false;
+            for (auto& available: availableLayers){
+                if (strcmp(layer, available.layerName)==0){
+                    match = true;
+                    break;
+                }
+            }
+            if(!match){
+                support = false;
+                cout<<"Layer Not Support: "<<layer<<endl;
+            }
+        }        
+        
+        return support;
+    }
+
+    
+    void setupDebugMessenger(){
+
+    }
+
+
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+    {
+        cerr << "validation layer: " << pCallbackData->pMessage <<endl;
+        return VK_FALSE;
+    }
 };
 
 
